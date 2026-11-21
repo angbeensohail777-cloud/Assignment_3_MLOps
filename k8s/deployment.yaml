@@ -1,0 +1,96 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: btc-forecast-deployment
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: btc-forecast
+
+  template:
+    metadata:
+      labels:
+        app: btc-forecast
+
+    spec:
+      initContainers:
+        - name: copy-model-artifacts
+          image: ghcr.io/angbeensohail777-cloud/assignment_3_mlops:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Checking application directory..."
+              ls -la /app
+
+              echo "Checking model directory..."
+              if [ -d /app/models ]; then
+                ls -la /app/models
+                cp -a /app/models/. /models/ || echo "Model copy failed; continuing"
+              else
+                echo "No /app/models directory found; continuing"
+              fi
+
+              echo "Model copy step completed"
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+
+      containers:
+        - name: flask-api
+          image: ghcr.io/angbeensohail777-cloud/assignment_3_mlops:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 5000
+
+          envFrom:
+            - configMapRef:
+                name: btc-forecast-config
+            - secretRef:
+                name: btc-forecast-secret
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: model-storage
+              mountPath: /app/models
+
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: btc-model-pvc
