@@ -1,4 +1,3 @@
-
 import pytest
 from app.app import app
 
@@ -47,10 +46,7 @@ def test_default_prediction(client):
 
 
 def test_custom_forecast_days(client):
-    response = client.post(
-        "/predict",
-        json={"forecast_days": 3}
-    )
+    response = client.post("/predict", json={"forecast_days": 3})
 
     assert response.status_code == 200
 
@@ -61,10 +57,7 @@ def test_custom_forecast_days(client):
 
 
 def test_invalid_forecast_days(client):
-    response = client.post(
-        "/predict",
-        json={"forecast_days": 0}
-    )
+    response = client.post("/predict", json={"forecast_days": 0})
 
     assert response.status_code == 400
 

@@ -1,4 +1,3 @@
-
 """
 Bitcoin Historical Data Fetcher
 Downloads daily BTC-USD data from Yahoo Finance
@@ -9,7 +8,6 @@ from pathlib import Path
 import logging
 
 import yfinance as yf
-
 
 # Project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,8 +20,7 @@ OUTPUT_FILE = RAW_DATA_DIR / "btc_usd_daily.csv"
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -42,7 +39,7 @@ def fetch_bitcoin_data():
             period="max",
             interval="1d",
             auto_adjust=False,
-            progress=False
+            progress=False,
         )
 
         if data.empty:
@@ -52,23 +49,12 @@ def fetch_bitcoin_data():
         if hasattr(data.columns, "nlevels") and data.columns.nlevels > 1:
             data.columns = data.columns.get_level_values(0)
 
-        required_columns = [
-            "Open",
-            "High",
-            "Low",
-            "Close",
-            "Volume"
-        ]
+        required_columns = ["Open", "High", "Low", "Close", "Volume"]
 
-        missing_columns = [
-            col for col in required_columns
-            if col not in data.columns
-        ]
+        missing_columns = [col for col in required_columns if col not in data.columns]
 
         if missing_columns:
-            raise ValueError(
-                f"Missing required columns: {missing_columns}"
-            )
+            raise ValueError(f"Missing required columns: {missing_columns}")
 
         # Keep required financial columns
         data = data[required_columns].copy()
@@ -104,5 +90,3 @@ def fetch_bitcoin_data():
 
 if __name__ == "__main__":
     fetch_bitcoin_data()
-
-

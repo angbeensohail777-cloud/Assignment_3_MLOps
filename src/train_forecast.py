@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import json
 import pickle
@@ -7,7 +6,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.arima.model import ARIMA
-
 
 # Project directories
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -27,20 +25,12 @@ def calculate_metrics(actual, predicted):
 
     mape = np.mean(np.abs((actual - predicted) / actual)) * 100
 
-    return {
-        "MAE": float(mae),
-        "RMSE": float(rmse),
-        "MAPE": float(mape)
-    }
+    return {"MAE": float(mae), "RMSE": float(rmse), "MAPE": float(mape)}
 
 
 def main():
     # Load processed dataset
-    df = pd.read_csv(
-        DATA_PATH,
-        index_col=0,
-        parse_dates=True
-    )
+    df = pd.read_csv(DATA_PATH, index_col=0, parse_dates=True)
 
     df = df.sort_index()
     prices = df["Close"].astype(float).dropna()
@@ -55,19 +45,13 @@ def main():
     print("Training ARIMA model for evaluation...")
 
     # Train model on historical training data
-    evaluation_model = ARIMA(
-        train_data,
-        order=(5, 1, 0)
-    ).fit()
+    evaluation_model = ARIMA(train_data, order=(5, 1, 0)).fit()
 
     # Forecast the next 7 days
     predictions = evaluation_model.forecast(steps=7)
 
     # Evaluate predictions
-    metrics = calculate_metrics(
-        test_data.values,
-        predictions.values
-    )
+    metrics = calculate_metrics(test_data.values, predictions.values)
 
     print("\nModel Evaluation Results")
     print("------------------------")
@@ -77,10 +61,7 @@ def main():
     # Train final model using the complete dataset
     print("\nTraining final model on complete dataset...")
 
-    final_model = ARIMA(
-        prices,
-        order=(5, 1, 0)
-    ).fit()
+    final_model = ARIMA(prices, order=(5, 1, 0)).fit()
 
     # Save trained model
     model_path = MODEL_DIR / "btc_arima_model.pkl"
@@ -101,4 +82,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
