@@ -1,5 +1,10 @@
 {
     "MAE": 4853.9359494068585,
     "RMSE": 5215.1856017169985,
-    "MAPE": 7.765712685137828
+    "MAPE": 7.765712685137828,
+    "mape_threshold": 10.0,
+    "threshold_passed": true,
+    "test_window_days": 7,
+    "test_start_date": "2026-11-14",
+    "test_end_date": "2026-11-20"
 }

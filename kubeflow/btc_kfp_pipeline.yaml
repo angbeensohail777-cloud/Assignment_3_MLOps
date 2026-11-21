@@ -1,0 +1,215 @@
+# PIPELINE DEFINITION
+# Name: btc-forecasting-pipeline
+# Description: BTC data ingestion, feature generation, and ARIMA model training.
+components:
+  comp-generate-btc-features:
+    executorLabel: exec-generate-btc-features
+    inputDefinitions:
+      artifacts:
+        input_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        output_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-ingest-btc-data:
+    executorLabel: exec-ingest-btc-data
+    outputDefinitions:
+      artifacts:
+        output_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train-btc-model:
+    executorLabel: exec-train-btc-model
+    inputDefinitions:
+      artifacts:
+        input_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        output_metrics:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+        output_model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-generate-btc-features:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - generate_btc_features
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.18.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef generate_btc_features(\n    input_dataset: Input[Dataset],\n\
+          \    output_dataset: Output[Dataset],\n):\n    import pandas as pd\n\n \
+          \   data = pd.read_csv(input_dataset.path)\n\n    data[\"Close\"] = pd.to_numeric(data[\"\
+          Close\"], errors=\"coerce\")\n    data = data.dropna(subset=[\"Close\"])\n\
+          \n    data[\"MA_7\"] = data[\"Close\"].rolling(window=7).mean()\n    data[\"\
+          MA_30\"] = data[\"Close\"].rolling(window=30).mean()\n\n    data[\"Daily_Return\"\
+          ] = data[\"Close\"].pct_change()\n\n    data[\"Volatility_7\"] = (\n   \
+          \     data[\"Daily_Return\"].rolling(window=7).std()\n    )\n\n    data[\"\
+          Volatility_30\"] = (\n        data[\"Daily_Return\"].rolling(window=30).std()\n\
+          \    )\n\n    data = data.dropna()\n    data.to_csv(output_dataset.path,\
+          \ index=False)\n\n    print(f\"Generated features for {len(data)} records.\"\
+          )\n\n"
+        image: python:3.12-slim
+    exec-ingest-btc-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - ingest_btc_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'yfinance==0.2.66'\
+          \ 'pandas==2.2.3'  &&  python3 -m pip install --quiet --no-warn-script-location\
+          \ 'kfp==2.18.1' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"\
+          3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef ingest_btc_data(output_dataset: Output[Dataset]):\n    import\
+          \ pandas as pd\n    import yfinance as yf\n\n    data = yf.download(\n \
+          \       \"BTC-USD\",\n        period=\"5y\",\n        interval=\"1d\",\n\
+          \        auto_adjust=True,\n        progress=False,\n    )\n\n    if data.empty:\n\
+          \        raise ValueError(\"No BTC data was downloaded.\")\n\n    if isinstance(data.columns,\
+          \ pd.MultiIndex):\n        data.columns = data.columns.get_level_values(0)\n\
+          \n    data = data.reset_index()\n    data.to_csv(output_dataset.path, index=False)\n\
+          \n    print(f\"Downloaded {len(data)} BTC records.\")\n\n"
+        image: python:3.12-slim
+    exec-train-btc-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_btc_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'statsmodels==0.14.4' 'scikit-learn==1.6.1'  &&  python3 -m pip install\
+          \ --quiet --no-warn-script-location 'kfp==2.18.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_btc_model(\n    input_dataset: Input[Dataset],\n    output_model:\
+          \ Output[Model],\n    output_metrics: Output[Artifact],\n):\n    import\
+          \ json\n    import pickle\n\n    import pandas as pd\n    from statsmodels.tsa.arima.model\
+          \ import ARIMA\n    from sklearn.metrics import mean_absolute_error, mean_squared_error\n\
+          \n    data = pd.read_csv(input_dataset.path)\n    prices = data[\"Close\"\
+          ].dropna().astype(float)\n\n    if len(prices) <= 7:\n        raise ValueError(\"\
+          Not enough BTC records for training.\")\n\n    train_data = prices.iloc[:-7]\n\
+          \    test_data = prices.iloc[-7:]\n\n    # Train and evaluate using the\
+          \ latest 7 days as test data\n    test_model = ARIMA(train_data, order=(5,\
+          \ 1, 0))\n    test_model_fit = test_model.fit()\n\n    predictions = test_model_fit.forecast(steps=7)\n\
+          \n    mae = mean_absolute_error(test_data, predictions)\n    mse = mean_squared_error(test_data,\
+          \ predictions)\n    rmse = mse ** 0.5\n\n    metrics = {\n        \"MAE\"\
+          : float(mae),\n        \"MSE\": float(mse),\n        \"RMSE\": float(rmse),\n\
+          \        \"test_days\": 7,\n    }\n\n    # Train final model using all available\
+          \ data\n    final_model = ARIMA(prices, order=(5, 1, 0))\n    final_model_fit\
+          \ = final_model.fit()\n\n    with open(output_model.path, \"wb\") as model_file:\n\
+          \        pickle.dump(final_model_fit, model_file)\n\n    with open(output_metrics.path,\
+          \ \"w\") as metrics_file:\n        json.dump(metrics, metrics_file, indent=4)\n\
+          \n    print(\"BTC model training and evaluation completed.\")\n    print(metrics)\n\
+          \n"
+        image: python:3.12-slim
+pipelineInfo:
+  description: BTC data ingestion, feature generation, and ARIMA model training.
+  name: btc-forecasting-pipeline
+root:
+  dag:
+    tasks:
+      generate-btc-features:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-generate-btc-features
+        dependentTasks:
+        - ingest-btc-data
+        inputs:
+          artifacts:
+            input_dataset:
+              taskOutputArtifact:
+                outputArtifactKey: output_dataset
+                producerTask: ingest-btc-data
+        taskInfo:
+          name: generate-btc-features
+      ingest-btc-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-ingest-btc-data
+        taskInfo:
+          name: ingest-btc-data
+      train-btc-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-btc-model
+        dependentTasks:
+        - generate-btc-features
+        inputs:
+          artifacts:
+            input_dataset:
+              taskOutputArtifact:
+                outputArtifactKey: output_dataset
+                producerTask: generate-btc-features
+        taskInfo:
+          name: train-btc-model
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.18.1
